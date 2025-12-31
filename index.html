@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verb-Final Sumadan Translator</title>
+<style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; line-height: 1.6; }
+    textarea { width: 100%; height: 100px; margin-bottom: 1rem; font-size: 16px; }
+    input[type="file"] { margin-bottom: 1rem; }
+    button { padding: 0.5rem 1rem; font-size: 16px; cursor: pointer; }
+    pre { background: #f4f4f4; padding: 1rem; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<h1>Verb-Final Sumadan Translator</h1>
+
+<label>Upload Dictionary File (words.txt):</label>
+<input type="file" id="dictionaryFile" accept=".txt"><br>
+
+<label>Enter English Text:</label>
+<textarea id="englishText" placeholder="Type your English text here..."></textarea><br>
+
+<button onclick="translateText()">Translate</button>
+
+<h2>Results</h2>
+<strong>English:</strong>
+<pre id="englishOutput"></pre>
+<strong>Sumadan (Verb-Final):</strong>
+<pre id="sumadanOutput"></pre>
+
+<script>
+let engToSmd = {};
+const commonVerbs = new Set([
+    "be","is","are","was","were",
+    "love","like","see","eat","make",
+    "go","take","know","think","say",
+    "have","has","had","want","need",
+    "play","run","walk","come","look","define","constitutes","support"
+]);
+
+document.getElementById('dictionaryFile').addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt){
+        const lines = evt.target.result.split(/\r?\n/);
+        for(const line of lines){
+            const l = line.trim();
+            if(!l || l.toLowerCase().startsWith("word") || l.startsWith("#")) continue;
+            let parts = l.includes("\t") ? l.split("\t") : l.split(",");
+            if(parts.length < 3) continue;
+            const smd = parts[0].trim();
+            const freq = parseInt(parts[1].trim()) || 0;
+            const eng = parts[2].trim().toLowerCase();
+            if(!engToSmd[eng] || freq > engToSmd[eng][1]){
+                engToSmd[eng] = [smd, freq];
+            }
+        }
+        alert("Dictionary loaded!");
+    };
+    reader.readAsText(file, "utf-8");
+});
+
+function tokenize(text){
+    return text.match(/[A-Za-zÀ-ÖØ-öø-ÿ']+|[.,:;!?“”"]/g) || [];
+}
+
+function translateWord(word){
+    const lower = word.toLowerCase();
+    if(engToSmd[lower]){
+        let smd = engToSmd[lower][0];
+        if(word[0] === word[0].toUpperCase()) smd = smd.charAt(0).toUpperCase() + smd.slice(1);
+        return smd;
+    }
+    return `{${word}}`;
+}
+
+function reorderVerbFinal(tokens){
+    let words = [], punctuation = [];
+    for(const t of tokens){
+        if(/[A-Za-zÀ-ÖØ-öø-ÿ']+/.test(t)) words.push(t);
+        else punctuation.push(t);
+    }
+
+    let verb = null, remaining = [];
+    for(const w of words){
+        if(!verb && commonVerbs.has(w.toLowerCase())) verb = w;
+        else remaining.push(w);
+    }
+
+    if(verb) remaining.push(verb);
+
+    if(punctuation.length) remaining[remaining.length-1] += punctuation.join('');
+    return remaining;
+}
+
+function rebuildText(tokens){
+    let text = '';
+    for(let i=0; i<tokens.length; i++){
+        if(i>0 && /[A-Za-zÀ-ÖØ-öø-ÿ']+/.test(tokens[i])) text += ' ';
+        text += tokens[i];
+    }
+    return text;
+}
+
+function translate(text){
+    const tokens = tokenize(text);
+    const reordered = reorderVerbFinal(tokens);
+    const translatedTokens = reordered.map(t => /[A-Za-zÀ-ÖØ-öø-ÿ']+/.test(t) ? translateWord(t) : t);
+    return rebuildText(translatedTokens);
+}
+
+function translateText(){
+    const text = document.getElementById('englishText').value;
+    document.getElementById('englishOutput').textContent = text;
+    document.getElementById('sumadanOutput').textContent = translate(text);
+}
+</script>
+
+</body>
+</html>
